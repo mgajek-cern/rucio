@@ -2,7 +2,7 @@ name: End to End integration tests
 
 on:
   pull_request:
-  push:
+  # push:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

@@ -2,7 +2,7 @@ name: VO-specific tests
 
 on:
   pull_request:
-  push:
+  # push:
   workflow_dispatch:
 
 concurrency:
