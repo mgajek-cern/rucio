@@ -2,12 +2,13 @@
 
 ## Checklist
 - [ ] Issue exists: #___
-- [ ] Branch naming: `patch-[issue]-[desc]`
+- [ ] Branch naming: `patch-[issue]-[desc]` OR `feature-[issue]-[desc]`
 - [ ] Title format: `<component>: <message> #<issue>`
 - [ ] Backward compatibility maintained
 - [ ] Updated existing tests
 - [ ] Documentation updated
 - [ ] Performance impact considered
+- [ ] Flake8/Pylint compliant
 - [ ] CI passing
 
 ## Description
@@ -22,11 +23,11 @@
 **Implementation:**
 <!-- How did you implement the enhancement? -->
 
-**Backward Compatibility:**
-<!-- How does this maintain compatibility? -->
-
 **Testing Done:**
 <!-- How you tested the enhancement -->
+
+**Backward Compatibility:**
+<!-- How does this maintain compatibility? -->
 
 **Performance Impact:**
 <!-- Any performance changes (positive/negative/none) -->

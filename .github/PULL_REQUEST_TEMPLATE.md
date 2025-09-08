@@ -9,34 +9,4 @@
 
 ---
 
-## Or use this general template:
-
-### Basic Requirements
-- [ ] Issue exists: #___
-- [ ] Branch naming: `patch-[issue]-[desc]` OR `feature-[issue]-[desc]`
-- [ ] Title format: `<component>: <message> #<issue>`
-
-### Code & Testing
-- [ ] Flake8/Pylint compliant
-- [ ] Tests written (if new feature)
-- [ ] CI passing
-- [ ] No breaking changes
-
-### Type of Change
-- [ ] Patch (bug fix)
-- [ ] Feature (new functionality)
-
----
-
-## Description
-**Related Issue:** #___
-
-**Change Summary:**
-<!-- Brief description -->
-
-**Testing Done:**
-<!-- How you tested -->
-
----
-
 *By submitting this PR, I confirm I have followed the [Contributing Guide](https://rucio.cern.ch/documentation/contributing/).*

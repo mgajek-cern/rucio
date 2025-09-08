@@ -8,6 +8,7 @@
 - [ ] Added regression test
 - [ ] Verified fix doesn't break existing functionality
 - [ ] Updated relevant documentation
+- [ ] Flake8/Pylint compliant
 - [ ] CI passing
 
 ## Description

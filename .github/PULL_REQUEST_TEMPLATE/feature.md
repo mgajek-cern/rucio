@@ -9,6 +9,7 @@
 - [ ] Database migrations included (if needed)
 - [ ] Backward compatibility considered
 - [ ] Performance impact assessed
+- [ ] Flake8/Pylint compliant
 - [ ] CI passing
 
 ## Description

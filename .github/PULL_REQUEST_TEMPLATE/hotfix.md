@@ -8,6 +8,7 @@
 - [ ] Minimal, targeted change
 - [ ] Thoroughly tested
 - [ ] Ready for immediate release
+- [ ] Flake8/Pylint compliant
 - [ ] CI passing
 
 ## Description
