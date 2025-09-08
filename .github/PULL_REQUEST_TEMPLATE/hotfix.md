@@ -12,7 +12,6 @@
 - [ ] CI passing
 
 ## Description
-**Related Issue:** #___
 
 **Critical Problem:**
 <!-- What critical issue does this address? -->

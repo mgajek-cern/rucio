@@ -12,7 +12,6 @@
 - [ ] CI passing
 
 ## Description
-**Related Issue:** #___
 
 **Bug Summary:**
 <!-- What was the bug? -->

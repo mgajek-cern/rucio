@@ -12,7 +12,6 @@
 - [ ] CI passing
 
 ## Description
-**Related Issue:** #___
 
 **Enhancement Summary:**
 <!-- What improvement does this make? -->

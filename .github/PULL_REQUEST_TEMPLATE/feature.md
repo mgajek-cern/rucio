@@ -13,7 +13,6 @@
 - [ ] CI passing
 
 ## Description
-**Related Issue:** #___
 
 **Feature Summary:**
 <!-- What new functionality does this add? -->
