@@ -25,3 +25,4 @@ To learn how to deploy and configure Rucio, consult the [documentation](https://
 ## Getting Support
 
 If you are looking for support, please contact us via one of our [official channels](https://rucio.cern.ch/documentation/contact_us/).
+
