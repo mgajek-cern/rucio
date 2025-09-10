@@ -8,7 +8,6 @@
 - [ ] Updated documentation
 - [ ] Database migrations (if needed)
 - [ ] Backward compatible
-- [ ] CI passing
 
 ## Description
 

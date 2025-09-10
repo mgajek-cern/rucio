@@ -5,7 +5,6 @@
 - [🐛 Bug Fix](?expand=1&template=bugfix.md)
 - [✨ New Feature](?expand=1&template=feature.md)
 - [⚡ Enhancement](?expand=1&template=enhancement.md)
-- [🚨 Hotfix](?expand=1&template=hotfix.md)
 
 ---
 

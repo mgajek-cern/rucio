@@ -6,8 +6,7 @@
 - [ ] Title: `<component>: <message> #<issue>`
 - [ ] Backward compatible
 - [ ] Tests updated
-- [ ] Docs updated (if needed)
-- [ ] CI passing
+- [ ] Updated documentation
 
 ## Description
 

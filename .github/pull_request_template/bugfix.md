@@ -3,11 +3,10 @@
 ## Checklist
 - [ ] Issue: #___
 - [ ] Branch: `patch-[issue]-[desc]`
-- [ ] Title: `<component>: <message> Fix #<issue>`
-- [ ] Added regression test
+- [ ] Title: `<component>: <message> #<issue>`
+- [ ] Added regression tests
 - [ ] Doesn't break existing functionality
-- [ ] Updated docs (if needed)
-- [ ] CI passing
+- [ ] Updated documentation
 
 ## Description
 
