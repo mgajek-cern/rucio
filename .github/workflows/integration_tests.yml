@@ -146,6 +146,34 @@ jobs:
             pip install --no-cache-dir -e /rucio_source
             tools/run_tests.sh -ir
           "
+
+      - name: Debug OIDC Configuration  
+        shell: bash
+        run: |
+          echo "=== Checking OIDC Configuration Files ==="
+          docker exec -t dev-rucio-1 bash -c "
+            echo '--- /opt/rucio/etc/rucio.cfg content ---'
+            cat /opt/rucio/etc/rucio.cfg
+            echo ''
+            echo '--- /opt/rucio/etc/idpsecrets.json content ---'
+            cat /opt/rucio/etc/idpsecrets.json 2>/dev/null || echo 'idpsecrets.json not found'
+            echo ''
+            echo '--- OIDC config values from Python ---'
+            python3 -c '
+          from rucio.common.config import config_get
+          print(\"IDPSECRETS:\", config_get(\"oidc\", \"idpsecrets\", False))
+          print(\"ADMIN_ISSUER_ID:\", config_get(\"oidc\", \"admin_issuer\", False))
+          print(\"EXPECTED_AUDIENCE:\", config_get(\"oidc\", \"expected_audience\", False, \"rucio\"))
+          print(\"EXPECTED_SCOPE:\", config_get(\"oidc\", \"expected_scope\", False, \"openid profile\"))
+            '
+            echo ''
+            echo '--- IAM/Keycloak containers status ---'
+          "
+          docker ps | grep -E "(keycloak|indigoiam)" || echo "No IAM containers running"
+
+      - name: Test Authentication Core (including OIDC)
+        run: docker exec -t dev-rucio-1 tools/pytest.sh -v --tb=short tests/test_authentication.py
+
       - name: File Upload/Download Test
         run: docker exec -t dev-rucio-1 tools/pytest.sh -v --tb=short tests/test_rucio_server.py
       - name: UploadClient Test
