@@ -4,10 +4,13 @@
 - [ ] Issue: #___
 - [ ] Branch: `feature-[issue]-[desc]`
 - [ ] Title: `<component>: <message> #<issue>`
-- [ ] Added comprehensive tests
-- [ ] Updated documentation
+- [ ] Added comprehensive tests (unit, integration, edge cases)
 - [ ] Database migrations (if needed)
-- [ ] Backward compatible
+- [ ] Backward compatible (APIs, configs, data formats work with LTS line)
+- [ ] Updated relevant documentation:
+  - [ ] Docstrings (if code changes affect public APIs)
+  - [ ] OpenAPI specs (if API changes)
+  - [ ] Follow-up PR needed in rucio/documentation
 
 ## Description
 

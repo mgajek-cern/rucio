@@ -4,9 +4,13 @@
 - [ ] Issue: #___
 - [ ] Branch: `patch-[issue]-[desc]`
 - [ ] Title: `<component>: <message> #<issue>`
-- [ ] Backward compatible
-- [ ] Tests updated
-- [ ] Updated documentation
+- [ ] Backward compatible (APIs, configs, data formats work with LTS line)
+- [ ] Contains user-facing breaking changes
+- [ ] Added/updated tests to cover the enhanced functionality
+- [ ] Updated relevant documentation:
+  - [ ] Docstrings (if code changes affect public APIs)
+  - [ ] OpenAPI specs (if API changes)
+  - [ ] Follow-up PR needed in rucio/documentation
 
 ## Description
 

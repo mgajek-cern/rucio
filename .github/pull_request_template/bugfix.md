@@ -4,9 +4,12 @@
 - [ ] Issue: #___
 - [ ] Branch: `patch-[issue]-[desc]`
 - [ ] Title: `<component>: <message> #<issue>`
-- [ ] Added regression tests
-- [ ] Doesn't break existing functionality
-- [ ] Updated documentation
+- [ ] Backward compatible (APIs, configs, data formats work with LTS line)
+- [ ] Added regression tests to verify the fix and catch future regressions
+- [ ] Updated relevant documentation:
+  - [ ] Docstrings (if code changes affect public APIs)
+  - [ ] OpenAPI specs (if API changes)
+  - [ ] Follow-up PR needed in rucio/documentation
 
 ## Description
 
