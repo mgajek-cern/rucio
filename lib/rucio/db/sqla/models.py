@@ -1676,6 +1676,7 @@ class OAuthRequest(BASE, ModelBase):
     refresh_lifetime: Mapped[Optional[int]] = mapped_column(Integer())
     ip: Mapped[Optional[str]] = mapped_column(String(39), nullable=True)
     expired_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.utcnow() + timedelta(seconds=600))  # 10 min lifetime by default
+    code_verifier: Mapped[Optional[str]] = mapped_column(String(128))
     _table_args = (PrimaryKeyConstraint('state', name='OAUTH_REQUESTS_STATE_PK'),
                    CheckConstraint('EXPIRED_AT IS NOT NULL', name='OAUTH_REQUESTS_EXPIRED_AT_NN'),
                    Index('OAUTH_REQUESTS_ACC_EXP_AT_IDX', 'account', 'expired_at'),

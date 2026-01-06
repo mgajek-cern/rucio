@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import base64
+import hashlib
 import time
 import traceback
 import uuid
@@ -1989,3 +1991,201 @@ def test_token_cache() -> None:
     }])
     _token_cache_set(key, expired_token)
     assert _token_cache_get(key) is None
+
+# Add new test class method
+@pytest.mark.noparallel(reason='fails when run in parallel')
+class TestAuthCoreAPIoidc:
+    def setup_method(self):
+        if config_get_bool('common', 'multi_vo', raise_exception=False, default=False):
+            self.vo = {'vo': get_vo()}
+        else:
+            self.vo = {}
+
+        self.db_session = get_session()
+        self.accountstring = 'test_' + rndstr()
+        self.accountstring = self.accountstring.lower()
+        self.account = InternalAccount(self.accountstring, **self.vo)
+        self.adminaccountstring = 'admin_' + rndstr()[:-1]  # Too long to use full string
+        print("ADMIN ACCOUNT STRING: ", self.adminaccountstring)
+        self.adminaccountstring = self.adminaccountstring.lower()
+        self.adminaccount = InternalAccount(self.adminaccountstring, **self.vo)
+        self.adminaccSUB = str('adminSUB' + rndstr()).lower()
+        self.adminaccSUB_otherISS = str('adminSUB_otherISS' + rndstr()).lower()
+        self.adminClientSUB = str('adminclientSUB' + rndstr()).lower()
+        self.adminClientSUB_otherISS = str('adminclientSUB_otherISS' + rndstr()).lower()
+        try:
+            add_account(self.account, AccountType.USER, 'rucio@email.com', session=self.db_session)
+        except Duplicate:
+            pass
+        try:
+            add_account(self.adminaccount, AccountType.SERVICE, 'rucio@email.com', session=self.db_session)
+        except Duplicate:
+            pass
+
+        try:
+            add_account_identity('SUB=knownsub, ISS=https://test_issuer/', IdentityType.OIDC, self.account, 'rucio_test@test.com', session=self.db_session)
+            add_account_identity('SUB=%s, ISS=https://test_issuer/' % self.adminaccSUB, IdentityType.OIDC, self.adminaccount, 'rucio_test@test.com', session=self.db_session)
+            add_account_identity('SUB=%s, ISS=https://test_other_issuer/' % self.adminaccSUB_otherISS, IdentityType.OIDC, self.adminaccount, 'rucio_test@test.com', session=self.db_session)
+            add_account_identity('SUB=%s, ISS=https://test_issuer/' % self.adminClientSUB, IdentityType.OIDC, self.adminaccount, 'rucio_test@test.com', session=self.db_session)
+            add_account_identity('SUB=%s, ISS=https://test_other_issuer/' % self.adminClientSUB_otherISS, IdentityType.OIDC, self.adminaccount, 'rucio_test@test.com', session=self.db_session)
+        except DatabaseException:
+            pass
+
+    def teardown_method(self):
+        """Cleanup runs after each test method"""
+        self.db_session.remove()
+    
+    def test_pkce_parameter_generation(self):
+        """Test PKCE code_verifier and code_challenge generation"""
+        from rucio.core.oidc import _generate_pkce_pair
+        
+        code_verifier, code_challenge = _generate_pkce_pair()
+        
+        # Verify code_verifier length (43-128 chars)
+        assert 43 <= len(code_verifier) <= 128
+        
+        # Verify code_verifier is URL-safe base64
+        assert all(c in 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_'
+                  for c in code_verifier)
+        
+        # Verify code_challenge is correct SHA256 hash
+        expected_challenge_bytes = hashlib.sha256(code_verifier.encode('ascii')).digest()
+        expected_challenge = base64.urlsafe_b64encode(expected_challenge_bytes).decode('ascii').rstrip('=')
+        assert code_challenge == expected_challenge
+        
+        # Verify uniqueness (generate multiple pairs)
+        verifiers = set()
+        for _ in range(100):
+            v, _ = _generate_pkce_pair()
+            verifiers.add(v)
+        assert len(verifiers) == 100  # All should be unique
+    
+    @patch('rucio.core.oidc.PKCE_ENABLED', True)
+    @patch('rucio.core.oidc.__get_init_oidc_client')
+    @patch('rucio.core.oidc.__get_rucio_oidc_clients')
+    def test_get_auth_oidc_with_pkce(self, mock_clients, mock_oidc_client):
+        """Test OIDC authorization URL includes PKCE parameters"""
+        
+        def check_pkce_in_init(issuer_id=None, redirect_to=None, state=None,
+                               nonce=None, scope=None, audience=None, first_init=None,
+                               code_challenge=None, code_challenge_method=None, **kwargs):
+            # Verify PKCE parameters are present
+            assert code_challenge is not None, "code_challenge should be present"
+            assert code_challenge_method == 'S256', "code_challenge_method should be S256"
+            assert len(code_challenge) > 0, "code_challenge should not be empty"
+            
+            return get_mock_oidc_client(
+                state=state, nonce=nonce, code_challenge=code_challenge,
+                code_challenge_method=code_challenge_method
+            )
+        
+        mock_oidc_client.side_effect = check_pkce_in_init
+        
+        kwargs = {
+            'auth_scope': 'openid profile',
+            'audience': 'rucio',
+            'issuer': 'dummy_admin_iss_nickname',
+            'auto': True,
+            'polling': False,
+            'refresh_lifetime': 96,
+            'ip': None,
+            'webhome': None
+        }
+        
+        auth_url = get_auth_oidc(self.account, session=self.db_session, **kwargs)
+        assert auth_url is not None
+        
+        # Verify code_verifier was stored in DB
+        query = select(models.OAuthRequest).where(
+            models.OAuthRequest.account == self.account
+        ).order_by(
+            models.OAuthRequest.expired_at.desc()
+        ).limit(1)
+        oauth_req = self.db_session.execute(query).scalar()
+        
+        assert oauth_req is not None
+        assert oauth_req.code_verifier is not None
+        assert len(oauth_req.code_verifier) >= 43
+    
+    @patch('rucio.core.oidc.PKCE_ENABLED', False)
+    @patch('rucio.core.oidc.__get_init_oidc_client')
+    @patch('rucio.core.oidc.__get_rucio_oidc_clients')
+    def test_get_auth_oidc_without_pkce(self, mock_clients, mock_oidc_client):
+        """Test OIDC authorization URL without PKCE (backward compatibility)"""
+        
+        def check_no_pkce_in_init(issuer_id=None, redirect_to=None, state=None,
+                                 nonce=None, scope=None, audience=None, first_init=None,
+                                 code_challenge=None, code_challenge_method=None, **kwargs):
+            # Verify PKCE parameters are NOT present
+            assert code_challenge is None, "code_challenge should not be present when PKCE disabled"
+            assert code_challenge_method is None, "code_challenge_method should not be present when PKCE disabled"
+            
+            return get_mock_oidc_client(state=state, nonce=nonce)
+        
+        mock_oidc_client.side_effect = check_no_pkce_in_init
+        
+        kwargs = {
+            'auth_scope': 'openid profile',
+            'audience': 'rucio',
+            'issuer': 'dummy_admin_iss_nickname',
+            'auto': True,
+            'polling': False,
+            'refresh_lifetime': 96,
+            'ip': None,
+            'webhome': None
+        }
+        
+        auth_url = get_auth_oidc(self.account, session=self.db_session, **kwargs)
+        assert auth_url is not None
+        
+        # Verify code_verifier was NOT stored in DB
+        query = select(models.OAuthRequest).where(
+            models.OAuthRequest.account == self.account
+        ).order_by(
+            models.OAuthRequest.expired_at.desc()
+        ).limit(1)
+        oauth_req = self.db_session.execute(query).scalar()
+        
+        assert oauth_req is not None
+        assert oauth_req.code_verifier is None
+    
+    def test_get_token_oidc_with_pkce_verifier(self):
+        """Test that code_verifier can be stored and retrieved"""
+        test_code_verifier = 'test_verifier_' + rndstr()
+        
+        oauth_req = models.OAuthRequest(
+            account=self.account,
+            state=rndstr(50),
+            nonce=rndstr(50),
+            code_verifier=test_code_verifier,
+            expired_at=datetime.utcnow() + timedelta(seconds=600)
+        )
+        oauth_req.save(session=self.db_session)
+        self.db_session.commit()
+        
+        # Retrieve and verify
+        retrieved = self.db_session.query(models.OAuthRequest).filter_by(
+            state=oauth_req.state
+        ).first()
+        
+        assert retrieved.code_verifier == test_code_verifier
+
+
+    def test_get_token_oidc_without_pkce_verifier(self):
+        """Test backward compatibility with NULL code_verifier"""
+        oauth_req = models.OAuthRequest(
+            account=self.account,
+            state=rndstr(50),
+            nonce=rndstr(50),
+            code_verifier=None,
+            expired_at=datetime.utcnow() + timedelta(seconds=600)
+        )
+        oauth_req.save(session=self.db_session)
+        self.db_session.commit()
+        
+        # Verify NULL is handled correctly
+        retrieved = self.db_session.query(models.OAuthRequest).filter_by(
+            state=oauth_req.state
+        ).first()
+        
+        assert retrieved.code_verifier is None

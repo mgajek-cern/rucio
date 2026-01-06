@@ -12,9 +12,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import base64
 import hashlib
 import json
 import logging
+import secrets
 import subprocess
 import traceback
 from datetime import datetime, timedelta
@@ -57,6 +59,7 @@ if TYPE_CHECKING:
 # should range from five minutes to six hours.
 TOKEN_MIN_LIFETIME: Final = config_get_int('oidc', 'token_min_lifetime', default=300)
 TOKEN_MAX_LIFETIME: Final = config_get_int('oidc', 'token_max_lifetime', default=21600)
+PKCE_ENABLED: Final = config_get_bool('oidc', 'pkce_enabled', default=True)
 
 REGION: Final = MemcacheRegion(expiration_time=TOKEN_MAX_LIFETIME)
 METRICS = MetricManager(module=__name__)
@@ -301,6 +304,11 @@ def __get_init_oidc_client(token_object: models.Token = None, token_type: str = 
         if config_get_bool('oidc', 'supports_audience', raise_exception=False, default=True):
             auth_args["audience"] = token_object.audience if token_object else kwargs.get('audience', " ")
 
+        # Add PKCE parameters if present
+        if 'code_challenge' in kwargs and 'code_challenge_method' in kwargs:
+            auth_args['code_challenge'] = kwargs['code_challenge']
+            auth_args['code_challenge_method'] = kwargs['code_challenge_method']
+
         if token_object:
             issuer = token_object.identity.split(", ")[1].split("=")[1]
             oidc_client = OIDC_CLIENTS[issuer]
@@ -359,6 +367,22 @@ def __get_init_oidc_client(token_object: models.Token = None, token_type: str = 
     except Exception as error:
         raise CannotAuthenticate(traceback.format_exc()) from error
 
+def _generate_pkce_pair() -> tuple[str, str]:
+    """
+    Generate PKCE code_verifier and code_challenge.
+    
+    :returns: Tuple of (code_verifier, code_challenge)
+    """
+    # Generate code_verifier (43-128 chars, URL-safe base64)
+    code_verifier = secrets.token_urlsafe(43)
+    
+    # Generate code_challenge (SHA256 hash of verifier)
+    challenge_bytes = hashlib.sha256(code_verifier.encode('ascii')).digest()
+
+    # Remove base64 padding (RFC 7636 requires unpadded base64url)
+    code_challenge = base64.urlsafe_b64encode(challenge_bytes).decode('ascii').rstrip('=')
+    
+    return code_verifier, code_challenge
 
 @transactional_session
 def get_auth_oidc(account: str, *, session: "Session", **kwargs) -> str:
@@ -432,11 +456,24 @@ def get_auth_oidc(account: str, *, session: "Session", **kwargs) -> str:
         # random strings in order to keep track of responses to outstanding requests (state)
         # and to associate a client session with an ID Token and to mitigate replay attacks (nonce).
         state, nonce = rndstr(50), rndstr(50)
+
+        # Generate PKCE parameters if enabled
+        code_verifier = None
+        pkce_params = {}
+        if PKCE_ENABLED:
+            code_verifier, code_challenge = _generate_pkce_pair()
+            pkce_params = {
+                'code_challenge': code_challenge,
+                'code_challenge_method': 'S256'
+            }
+            METRICS.counter('oidc.pkce.enabled').inc()
+
         # in the following statement we retrieve the authorization endpoint
         # from the client of the issuer and build url
         oidc_dict = __get_init_oidc_client(issuer_id=issuer_id, redirect_to=redirect_to,
                                            state=state, nonce=nonce,
-                                           scope=auth_scope, audience=audience, first_init=True)
+                                           scope=auth_scope, audience=audience, first_init=True,
+                                           **pkce_params)
         auth_url = oidc_dict['auth_url']
         redirect_url = oidc_dict['redirect']
         # redirect code is put in access_msg and returned to the user (if auto=False)
@@ -460,7 +497,8 @@ def get_auth_oidc(account: str, *, session: "Session", **kwargs) -> str:
                                                    redirect_msg=auth_url,
                                                    expired_at=expired_at,
                                                    refresh_lifetime=refresh_lifetime,
-                                                   ip=ip)
+                                                   ip=ip,
+                                                   code_verifier=code_verifier)
         oauth_session_params.save(session=session)
         # If user selected authentication via web browser, a redirection
         # URL is returned instead of the direct URL pointing to the IdP.
@@ -522,9 +560,18 @@ def get_token_oidc(
 
         oidc_client = __get_init_oidc_client(issuer=issuer, code=code, **client_params)['client']
         METRICS.counter(name='IdP_authentication.code_granted').inc()
+
+        # Prepare token request arguments
+        token_request_args = {"code": code}
+        
+        # Add code_verifier if PKCE was used
+        if oauth_req_params.code_verifier:
+            token_request_args["code_verifier"] = oauth_req_params.code_verifier
+            METRICS.counter('oidc.pkce.verifier_sent').inc()
+
         # exchange access code for a access token
         oidc_tokens = oidc_client.do_access_token_request(state=state,
-                                                          request_args={"code": code},
+                                                          request_args=token_request_args,
                                                           authn_method="client_secret_basic",
                                                           skew=LEEWAY_SECS)
         if 'error' in oidc_tokens:
