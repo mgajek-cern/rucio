@@ -537,10 +537,17 @@ def get_token_oidc(
               (no auto, auto, polling).
     """
     try:
+        logging.info("=== OIDC TOKEN EXCHANGE DEBUG ===") # TODO: Temporary application logs. To be removed
+        logging.info(f"Query string: {auth_query_string}") # TODO: Temporary application logs. To be removed
+
         stopwatch = Stopwatch()
         parsed_authquery = parse_qs(auth_query_string)
         state = parsed_authquery["state"][0]
         code = parsed_authquery["code"][0]
+        
+        logging.info(f"State: {state}") # TODO: Temporary application logs. To be removed
+        logging.info(f"Code: {code[:20]}...") # TODO: Temporary application logs. To be removed
+
         # getting oauth request params from the oauth_requests DB Table
         query = select(
             models.OAuthRequest
@@ -548,6 +555,13 @@ def get_token_oidc(
             models.OAuthRequest.state == state
         )
         oauth_req_params = session.execute(query).scalar()
+
+        logging.info(f"Found oauth_req_params: {oauth_req_params is not None}") # TODO: Temporary application logs. To be removed
+        if oauth_req_params: # TODO: Temporary application logs. To be removed
+            logging.info(f"Has code_verifier: {oauth_req_params.code_verifier is not None}") # TODO: Temporary application logs. To be removed
+            if oauth_req_params.code_verifier: # TODO: Temporary application logs. To be removed
+                logging.info(f"code_verifier length: {len(oauth_req_params.code_verifier)}") # TODO: Temporary application logs. To be removed
+
         if oauth_req_params is None:
             raise CannotAuthenticate("User related Rucio OIDC session could not keep "
                                      + "track of responses from outstanding requests.")  # NOQA: W503
@@ -563,6 +577,15 @@ def get_token_oidc(
 
         # Prepare token request arguments
         token_request_args = {"code": code}
+
+        if oauth_req_params.code_verifier: # TODO: Temporary application logs. To be removed
+            token_request_args["code_verifier"] = oauth_req_params.code_verifier # TODO: Temporary application logs. To be removed
+            logging.info("✓ Added code_verifier to token request") # TODO: Temporary application logs. To be removed
+            METRICS.counter('oidc.pkce.verifier_sent').inc() # TODO: Temporary application logs. To be removed
+        else: # TODO: Temporary application logs. To be removed
+            logging.warning("✗ No code_verifier found in DB") # TODO: Temporary application logs. To be removed
+        
+        logging.info(f"Token request args keys: {list(token_request_args.keys())}")
         
         # Add code_verifier if PKCE was used
         if oauth_req_params.code_verifier:
@@ -574,6 +597,12 @@ def get_token_oidc(
                                                           request_args=token_request_args,
                                                           authn_method="client_secret_basic",
                                                           skew=LEEWAY_SECS)
+
+        logging.info(f"Token response has error: {'error' in oidc_tokens}") # TODO: Temporary application logs. To be removed
+        if 'error' in oidc_tokens: # TODO: Temporary application logs. To be removed
+            logging.error(f"EGI error: {oidc_tokens.get('error')}") # TODO: Temporary application logs. To be removed
+            logging.error(f"EGI error_description: {oidc_tokens.get('error_description')}") # TODO: Temporary application logs. To be removed
+
         if 'error' in oidc_tokens:
             raise CannotAuthorize(oidc_tokens['error'])
         # mitigate replay attacks
