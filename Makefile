@@ -13,8 +13,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-.PHONY: help install test clean check
-
 # Default profiles for external services
 RUCIO_DEV_PROFILES ?= storage,externalmetadata
 
@@ -22,11 +20,11 @@ RUCIO_DEV_PROFILES ?= storage,externalmetadata
 VENV := .venv
 
 # Colors for output
-BLUE := \033[0;34m
-GREEN := \033[0;32m
-YELLOW := \033[1;33m
-RED := \033[0;31m
-NC := \033[0m
+BLUE   := $(shell printf "\033[0;34m")
+GREEN  := $(shell printf "\033[0;32m")
+YELLOW := $(shell printf "\033[1;33m")
+RED    := $(shell printf "\033[0;31m")
+NC     := $(shell printf "\033[0m")
 
 ##@ General
 
@@ -49,6 +47,11 @@ help: ## Display this help
 	@echo "  make services-start PROFILES=storage,iam,externalmetadata  # Custom profiles"
 	@echo "  make services-stop               # Stop and cleanup all services"
 	@echo ""
+	@echo "$(GREEN)DevContainer Setup (VS Code/PyCharm):$(NC)"
+	@echo "  make vs-code-open                # Start devcontainer + open in VS Code"
+	@echo "  make pycharm-open                # Start devcontainer + open in PyCharm"
+	@echo "  make dev-stop                    # Stop devcontainer"
+	@echo ""
 	@echo "$(YELLOW)Tips:$(NC)"
 	@echo "  • All 'check' targets use pre-commit hooks - same as CI"
 	@echo "  • Use 'make test-fresh' for clean DB state (fixes migration errors)"
@@ -59,6 +62,20 @@ help: ## Display this help
 ##@ Installation
 
 install: ## Install Rucio in venv and setup pre-commit (for local development)
+	@echo "$(BLUE)Checking required tools...$(NC)"
+	@if ! command -v python3 >/dev/null 2>&1; then \
+		echo "$(RED)Error: python3 is not installed.$(NC)"; \
+		exit 1; \
+	fi
+	@if ! command -v pip3 >/dev/null 2>&1; then \
+		echo "$(RED)Error: pip3 is not installed.$(NC)"; \
+		exit 1; \
+	fi
+	@if ! command -v npm >/dev/null 2>&1; then \
+		echo "$(RED)Error: npm is not installed.$(NC)"; \
+		exit 1; \
+	fi
+
 	@echo "$(BLUE)Creating virtual environment...$(NC)"
 	@python3 -m venv $(VENV)
 	@echo "$(BLUE)Installing dependencies...$(NC)"
@@ -67,23 +84,30 @@ install: ## Install Rucio in venv and setup pre-commit (for local development)
 	@$(VENV)/bin/pip install -r requirements/requirements.dev.txt
 	@$(VENV)/bin/pip install -e .
 	@$(VENV)/bin/pip install pre-commit
+
 	@echo "$(BLUE)Setting up pre-commit hooks...$(NC)"
 	@$(VENV)/bin/pre-commit install --install-hooks -t pre-commit
+
+	@echo "$(BLUE)Installing Dev Container CLI...$(NC)"
+	@npm install -g @devcontainers/cli
+
 	@if ! $(VENV)/bin/python3 -c "from magic import Magic" 2>/dev/null; then \
-		echo "$(YELLOW) Warning: libmagic not found$(NC)"; \
-		echo "$(YELLOW)  Some tests (dumper) will fail without it.$(NC)"; \
+		echo "$(YELLOW)Warning: libmagic not found$(NC)"; \
+		echo "$(YELLOW)Some tests (dumper) will fail without it.$(NC)"; \
 		if command -v brew >/dev/null 2>&1; then \
-			echo "$(YELLOW)  Install with: brew install libmagic$(NC)"; \
+			echo "$(YELLOW)Install with: brew install libmagic$(NC)"; \
 		elif command -v apt-get >/dev/null 2>&1; then \
-			echo "$(YELLOW)  Install with: sudo apt-get install libmagic1$(NC)"; \
+			echo "$(YELLOW)Install with: sudo apt-get install libmagic1$(NC)"; \
 		else \
-			echo "$(YELLOW)  Install libmagic using your system package manager$(NC)"; \
+			echo "$(YELLOW)Install libmagic using your system package manager$(NC)"; \
 		fi; \
 	else \
-		echo "$(GREEN) libmagic found$(NC)"; \
+		echo "$(GREEN)libmagic found$(NC)"; \
 	fi
-	@echo "$(GREEN) Development environment ready$(NC)"
-	@echo "$(YELLOW) Run 'source .venv/bin/activate' to activate the virtual environment$(NC)"
+
+	@echo "$(GREEN)Development environment ready$(NC)"
+	@echo "$(YELLOW)Run 'source .venv/bin/activate' to activate the virtual environment$(NC)"
+
 
 install-hooks: ## Install/reinstall pre-commit hooks
 	@pre-commit install --install-hooks -t pre-commit
@@ -242,10 +266,17 @@ test-e2e: .test-check-container .test-ensure-initialized ## Run end-to-end tests
 
 services-start: ## Start external services (e.g. PROFILES=storage,iam)
 	@echo "$(BLUE)Starting services with profiles: $(RUCIO_DEV_PROFILES)$(NC)"
-	@PROFILE_FLAGS=$$(echo "$(RUCIO_DEV_PROFILES)" | sed 's/,/ --profile /g' | sed 's/^/--profile /'); \
+	@RUCIO_HOST_SOURCE=$$(if [ -f /.dockerenv ]; then \
+		docker inspect $$(hostname) --format '{{ range .Mounts }}{{ if eq .Destination "/workspaces/rucio" }}{{ .Source }}{{ end }}{{ end }}' 2>/dev/null || pwd; \
+	else \
+		pwd; \
+	fi); \
+	export RUCIO_HOST_SOURCE; \
+	echo "$(YELLOW)Using source path: $$RUCIO_HOST_SOURCE$(NC)"; \
+	PROFILE_FLAGS=$$(echo "$(RUCIO_DEV_PROFILES)" | sed 's/,/ --profile /g' | sed 's/^/--profile /'); \
 	docker compose -f etc/docker/dev/docker-compose.yml $$PROFILE_FLAGS up -d
 	@echo "$(GREEN) Services started$(NC)"
-	@echo "$(YELLOW) Run 'make test-integration' to run integration tests$(NC)"
+	@echo "$(YELLOW) Run 'make test-e2e' to run e2e tests$(NC)"
 
 services-stop: ## Stop all dev services and cleanup
 	@echo "$(YELLOW)Stopping all dev services...$(NC)"
@@ -315,3 +346,56 @@ info: ## Show development environment info
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 	@echo "make check         # Fast quality checks (~5s)"
 	@echo "make test          # Run unit tests"
+
+##@ DevContainer
+
+# Variables
+RUCIO_TAG ?= latest
+WORKSPACE_PATH := $(shell pwd)
+
+dev-up: ## Start dev container with explicit socket mount and environment variables
+	@echo "$(BLUE)Starting Dev Container with tag: $(YELLOW)$(RUCIO_TAG)$(NC)"
+	@export RUCIO_TAG=$(RUCIO_TAG); \
+	devcontainer up \
+		--workspace-folder .
+
+dev-stop: ## Stop the devcontainer
+	@echo "$(YELLOW)Stopping devcontainer...$(NC)"
+	@CONTAINER_ID=$$(docker ps -q --filter "label=devcontainer.local_folder=$(WORKSPACE_PATH)"); \
+	if [ -n "$$CONTAINER_ID" ]; then \
+		docker stop $$CONTAINER_ID; \
+		echo "$(GREEN) Container stopped$(NC)"; \
+	else \
+		echo "$(YELLOW)No running devcontainer found$(NC)"; \
+	fi
+
+vs-code-open: dev-up ## Start devcontainer and open VS Code
+	@echo "$(BLUE)Attaching VS Code to devcontainer...$(NC)"
+	@CONTAINER_ID=$$(docker ps -q --filter "label=devcontainer.local_folder=$(WORKSPACE_PATH)" --latest); \
+	if [ -n "$$CONTAINER_ID" ]; then \
+		echo "$(GREEN)Found container: $$CONTAINER_ID$(NC)"; \
+		code --folder-uri="vscode-remote://attached-container+$$(printf '%s' "$$CONTAINER_ID" | xxd -p -c 256)/workspaces/rucio"; \
+	else \
+		echo "$(RED)Error: No devcontainer found$(NC)"; \
+		echo "$(YELLOW)Try running 'make dev-up' first$(NC)"; \
+		exit 1; \
+	fi
+
+pycharm-open: dev-up ## Start devcontainer and open PyCharm
+	@echo "$(BLUE)Attaching PyCharm to devcontainer...$(NC)"
+	@CONTAINER_ID=$$(docker ps -q --filter "label=devcontainer.local_folder=$(WORKSPACE_PATH)" --latest); \
+	if [ -n "$$CONTAINER_ID" ]; then \
+		echo "$(GREEN)Found container: $$CONTAINER_ID$(NC)"; \
+		echo "$(YELLOW)Opening PyCharm...$(NC)"; \
+		echo "$(YELLOW)Manual steps required:$(NC)"; \
+		echo "  1. In PyCharm: File → Remote Development → Docker"; \
+		echo "  2. Select 'Create Dev Container'"; \
+		echo "  3. Select 'From Local Project'"; \
+		echo "  4. Set 'Path to devcontainer.json'"; \
+		echo "  5. Click 'Build Container and Continue'"; \
+		echo ""; \
+	else \
+		echo "$(RED)Error: No devcontainer found$(NC)"; \
+		echo "$(YELLOW)Try running 'make dev-up' first$(NC)"; \
+		exit 1; \
+	fi

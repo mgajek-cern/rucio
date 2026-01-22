@@ -75,5 +75,6 @@ jobs:
         env:
           PY39_RUNTIME_IMAGE: ${{ needs.runtime_images.outputs.py39_image }}
           BUILD_LOCALLY: ${{ needs.runtime_images.outputs.build_locally }}
+          RUCIO_HOST_SOURCE: ${{ github.workspace }}
         run: |
           echo '{"matrix": ${{ toJson(matrix.cfg) }}, "runtime_images": {"3.9": "${{ needs.runtime_images.outputs.py39_image }}"}, "build_locally": "${{ needs.runtime_images.outputs.build_locally }}" }' | ./tools/test/run_tests.py

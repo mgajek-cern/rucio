@@ -1,0 +1,35 @@
+{
+  "name": "Rucio alma9 Development Environment",
+  // Injects the tag from your shell/Makefile environment
+  "image": "rucio/rucio-dev:${localEnv:RUCIO_TAG:-latest}",
+
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {"version": "18"},
+    "ghcr.io/devcontainers/features/git:1": {}
+  },
+
+  "workspaceFolder": "/workspaces/rucio",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python"
+      ]
+    }
+  },
+
+  "postCreateCommand": "dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo && dnf install -y docker-ce-cli docker-compose-plugin && make install",
+
+  "remoteUser": "root",
+  "privileged": true,
+
+  "mounts": [
+    "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
+  ],
+
+  "remoteEnv": {
+    "PYTHONPATH": "/workspaces/rucio/lib",
+    "RUCIO_HOME": "/workspaces/rucio",
+    "RUCIO_POLICY_PACKAGE": "atlas_rucio_policy_package"
+  }
+}

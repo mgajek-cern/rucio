@@ -238,6 +238,7 @@ jobs:
           PY39_RUNTIME_IMAGE: ${{ needs.runtime-images.outputs.py39_image }}
           PY310_RUNTIME_IMAGE: ${{ needs.runtime-images.outputs.py310_image }}
           BUILD_LOCALLY: ${{ needs.runtime-images.outputs.build_locally }}
+          RUCIO_HOST_SOURCE: ${{ github.workspace }}
         run: |
           echo '{"matrix": ${{ toJson(matrix.cfg) }}, "runtime_images": {"3.9": "${{ needs.runtime-images.outputs.py39_image }}", "3.10": "${{ needs.runtime-images.outputs.py310_image }}"}, "build_locally": "${{ needs.runtime-images.outputs.build_locally }}" }' | ./tools/test/run_tests.py
 
@@ -360,6 +361,7 @@ jobs:
       - name: Start containers
         run: |
           export DEV_PROFILES=storage,externalmetadata,iam
+          export RUCIO_HOST_SOURCE=$GITHUB_WORKSPACE/dev/rucio
           docker compose -f $GITHUB_WORKSPACE/dev/rucio/etc/docker/dev/docker-compose.yml --profile storage --profile externalmetadata --profile iam up -d
       
       - name: Initialize tests
@@ -374,7 +376,11 @@ jobs:
         if: ${{ success() || failure() }}
         shell: bash
         run: |
-          docker exec -t dev-rucio-1 cat /var/log/rucio/httpd_error_log
+          if docker ps -q --filter "name=dev-rucio-1" | grep -q .; then
+            docker exec -t dev-rucio-1 cat /var/log/rucio/httpd_error_log
+          else
+            echo "Container dev-rucio-1 is not running, skipping log output"
+          fi
       
       - name: Stop containers
         if: always()
