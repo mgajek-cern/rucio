@@ -347,6 +347,15 @@ info: ## Show development environment info
 	@echo "make check         # Fast quality checks (~5s)"
 	@echo "make test          # Run unit tests"
 
+db-diagram: .test-check-container ## Generate database ERD diagram (saves to rucio_erd.png)
+	@echo "$(BLUE)Generating database diagram...$(NC)"
+	@docker exec dev-rucio-1 bash -c " \
+		dnf install -y graphviz graphviz-devel && \
+		pip3 install eralchemy pydot psycopg2-binary \
+	"
+	@docker exec dev-rucio-1 bash -c "eralchemy -i 'postgresql://rucio:secret@ruciodb:5432/rucio' -s dev -o /rucio_source/rucio_erd.png"
+	@echo "$(GREEN)Diagram saved to rucio_erd.png$(NC)"
+
 ##@ DevContainer
 
 # Variables
