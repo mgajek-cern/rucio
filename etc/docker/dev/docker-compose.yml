@@ -559,6 +559,25 @@ services:
       iam-db:
         condition: service_healthy
 
+  localstack:
+    container_name: dev-localstack-1
+    image: localstack/localstack:latest
+    profiles:
+      - storage
+    environment:
+      - SERVICES=s3
+      - DEBUG=1
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
+      - AWS_REGION=us-east-1
+    ports:
+      - "4566:4566"
+    restart: on-failure
+    volumes:
+      - vol-localstack-data:/data
+
 volumes:
   # ------------------------------------------------------------------
   # Named volumes for each container
@@ -584,6 +603,7 @@ volumes:
   vol-iam-db-mysql:
   vol-mysql8-mysql:
   vol-postgres-data:
+  vol-localstack-data:
 
 networks:
   default:

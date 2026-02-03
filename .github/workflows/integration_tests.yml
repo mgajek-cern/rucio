@@ -157,6 +157,8 @@ jobs:
             pip install --no-cache-dir -e /rucio_source
             tools/run_tests.sh -ir
           "
+      - name: Test Protocol S3
+        run: docker exec -t dev-rucio-1 tools/pytest.sh -v --tb=short tests/test_rse_protocol_s3boto.py -m "integration and not unit"
       - name: File Upload/Download Test
         run: docker exec -t dev-rucio-1 tools/pytest.sh -v --tb=short tests/test_rucio_server.py
       - name: UploadClient Test
