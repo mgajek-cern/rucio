@@ -213,6 +213,21 @@ class Default(protocol.RSEProtocol):
                 self.__ctx.set_opt_string("X509", "CERT", proxy)
                 self.__ctx.set_opt_string("X509", "KEY", proxy)
 
+        # S3 support via Davix
+        if not auth_configured:
+            s3_access_key = self.rse.get('s3_access_key')
+            s3_secret_key = self.rse.get('s3_secret_key')
+
+            if s3_access_key and s3_secret_key:
+                self.__ctx.set_opt_string("S3", "ALTERNATE", "true")  # Path-style URLs
+                self.__ctx.set_opt_string("S3", "ACCESS_KEY_ID", s3_access_key)
+                self.__ctx.set_opt_string("S3", "SECRET_ACCESS_KEY", s3_secret_key)
+
+                region = self.rse.get('region', 'us-east-1')
+                self.__ctx.set_opt_string("S3", "REGION", region)
+
+                auth_configured = True
+                self.logger(logging.INFO, 'Configured S3 authentication via Davix')
         if TIMEOUT:
             try:
                 timeout = int(TIMEOUT)

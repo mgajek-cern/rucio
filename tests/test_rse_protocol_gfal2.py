@@ -14,6 +14,7 @@
 
 import os
 
+import boto3
 import pytest
 
 from rucio.common.utils import execute
@@ -90,3 +91,64 @@ class TestRseGFAL2(MgrTestCases):
         rse_settings, tmpdir, user = setup_rse_and_files
         self.init(tmpdir=tmpdir, rse_settings=rse_settings, user=user, vo=vo, impl='gfal')
         self.setup_scheme('srm')
+
+@skip_rse_tests_with_accounts
+class TestRseGFAL2WithS3(MgrTestCases):
+    """Test GFAL2 protocol with S3 endpoints via Davix plugin"""
+
+    @classmethod
+    @pytest.fixture(scope='class')
+    def setup_rse_and_files(cls, vo, tmp_path_factory):
+        """GFAL2-S3: Setup S3-compatible RSE for testing"""
+        rse_name = 'MINIO_S3_TEST'  # or 'COPERNICUS_S3'
+        rse_settings, tmpdir, user = cls.setup_common_test_env(rse_name, vo, tmp_path_factory)
+
+        # Load S3 configuration
+        data = load_test_conf_file('rse_repository.json')
+        s3_config = data[rse_name]['protocols']['supported']['https']
+
+        # Set S3 credentials in RSE settings
+        rse_settings['s3_access_key'] = os.environ.get('S3_ACCESS_KEY', 'minioadmin')
+        rse_settings['s3_secret_key'] = os.environ.get('S3_SECRET_KEY', 'minioadmin')
+        rse_settings['region'] = s3_config.get('region', 'us-east-1')
+
+        # Configure protocol to use GFAL2 with S3 support
+        for protocol in rse_settings['protocols']:
+            if protocol['scheme'] == 'https':
+                protocol['impl'] = 'rucio.rse.protocols.gfal.Default'
+                break
+
+        # Upload test files using boto3 (for setup)
+        s3_client = boto3.client(
+            's3',
+            endpoint_url=f"https://{s3_config['hostname']}:{s3_config['port']}",
+            aws_access_key_id=rse_settings['s3_access_key'],
+            aws_secret_access_key=rse_settings['s3_secret_key']
+        )
+
+        # Create test data
+        test_file = f'{tmpdir}/data.raw'
+        os.system(f'dd if=/dev/urandom of={test_file} bs=1024 count=1024')
+
+        # Upload files
+        bucket = s3_config['prefix'].strip('/')
+        for f in MgrTestCases.files_remote:
+            key = f'user/{user}/{f}'
+            s3_client.upload_file(test_file, bucket, key)
+
+        yield rse_settings, tmpdir, user
+
+        # Cleanup
+        for f in MgrTestCases.files_remote:
+            key = f'user/{user}/{f}'
+            try:
+                s3_client.delete_object(Bucket=bucket, Key=key)
+            except Exception as e:
+                # Log the error instead of a silent pass for easier debugging
+                print(f"Cleanup failed: {e}")
+
+    @pytest.fixture(autouse=True)
+    def setup_obj(self, setup_rse_and_files, vo):
+        rse_settings, tmpdir, user = setup_rse_and_files
+        self.init(tmpdir=tmpdir, rse_settings=rse_settings, user=user, vo=vo, impl='gfal')
+        self.setup_scheme('https')  # ← Use HTTPS instead of SRM
